@@ -14,7 +14,6 @@ class SelectRegionApp(tk.Tk):
         self.label = tk.Label(self, text="Select a Rectangle To Extract")
         self.label.pack(side="top")
 
-
         self.canvas = tk.Canvas(self, width=self.tk_im.width(), height=self.tk_im.height(), cursor="cross")
         self.canvas.pack(side="top", fill="both", expand=True)
         self.canvas.bind("<ButtonPress-1>", self.on_button_press)
@@ -33,8 +32,9 @@ class SelectRegionApp(tk.Tk):
     def done(self):
         if self.start_x is None:
             mb.showwarning("warning","you need to drag a rectangle over the region you want to extract before continuing")
-        self.result_dict["rect"] = self.canvas.coords(self.rect)
-        self.destroy()
+        else:
+            self.result_dict["rect"] = self.canvas.coords(self.rect)
+            self.destroy()
 
     def on_button_press(self, event):
         if not self.rect is None:
@@ -59,15 +59,6 @@ class SelectRegionApp(tk.Tk):
 
 def select_rectangle(image_filename):
     ans = dict()
-    app = SelectRegionApp('/home/cohend/Dropbox/Photos/David3.jpeg', ans)
+    app = SelectRegionApp(image_filename, ans)
     app.mainloop()
     return ans
-
-print(select_rectangle('/home/cohend/Dropbox/Photos/David3.jpeg'))
-
-
-
-
-# if __name__ == "__main__":
-#     app = SelectRegionApp('/home/cohend/Dropbox/Photos/David3.jpeg')
-#     app.mainloop()
