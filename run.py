@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/local/bin/python3.6
 import argparse
 import os
 import random as r
@@ -28,14 +28,15 @@ if __name__ == "__main__":
         pass
     elif args.command == "manual-label":
         print ("Manually Labeling Training Data")
-        filenames = os.listdir(args.images_dir)
-        assert(len(filenames) >= NUM_TRAIN)
-        print ("Number of images: {}".format(len(filenames)))
-        box_selecting_image = r.choice(filenames)
+        dir_entries = list(os.scandir(args.images_dir))
+        assert(len(dir_entries) >= NUM_TRAIN)
+        assert(all([x.is_file() for x in dir_entries]))
+        print ("Number of images: {}".format(len(dir_entries)))
+        box_selecting_image = r.choice(dir_entries)
         bbox = SR.select_rectangle(box_selecting_image)["rect"]
         print ("Bounding box defined: {}".format(bbox))
 
-        for i in r.sample(filenames, NUM_TRAIN):
+        for i in r.sample(dir_entries, NUM_TRAIN):
             # extract bbox image
             # show interface requesting manual label
             pass

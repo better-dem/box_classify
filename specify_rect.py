@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/local/bin/python3.6
 import tkinter as tk
 from tkinter import messagebox as mb
 from PIL import Image, ImageTk
@@ -62,3 +62,4 @@ def select_rectangle(image_filename):
     app = SelectRegionApp(image_filename, ans)
     app.mainloop()
     return ans
+
