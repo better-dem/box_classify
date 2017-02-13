@@ -8,6 +8,8 @@ import subprocess
 
 parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter, description='Convert all pdfs in input_dir to ppm images in output_dir')
 
+parser.add_argument('-p', '--page', required=True, type=str, help="which page of the pdf should we work with", action='store')
+
 parser.add_argument('-i', '--input_dir', required=True, type=str, help="the directory containing only pdf files to be converted", action='store')
 
 parser.add_argument('-o', '--output_dir', required=True, type=str, help="the directory to store PPM files created from the pdfs", action='store')
@@ -17,9 +19,10 @@ args = parser.parse_args()
 
 if __name__ == "__main__":
     if not os.path.exists(args.output_dir):
-        os.makedirs(arg.output_dir)
+        os.makedirs(args.output_dir)
 
     dir_entries = list(os.scandir(args.input_dir))
+    dir_entries = [e for e in dir_entries if e.is_file() and e.name.endswith(".pdf")]
     assert(all([x.is_file() and x.name.endswith(".pdf") for x in dir_entries]))
     print ("Number of pdfs: {}".format(len(dir_entries)))
 
@@ -36,8 +39,5 @@ if __name__ == "__main__":
 
     print("Done converting {} pdf files to ppm files. {} errors encountered.".format(num_converted, num_errors))
 
-        # extract bbox image
-        # show interface requesting manual label
-        pass
         
 
