@@ -29,9 +29,9 @@ if __name__ == "__main__":
     num_converted = 0
     num_errors = 0
     for e in dir_entries:
-        new_fname = e.name[0:-4]+".ppm"
+        new_fname = e.name[0:-4]
         try:
-            subprocess.check_output(["pdftoppm", e.path, args.output_dir+"/"+new_fname], timeout=30)
+            subprocess.check_output(["gs", "-sDEVICE=jpeg", "-f", args.page, "-l", args.page, e.path, args.output_dir+"/"+new_fname+"%d.jpg"], timeout=30)
         except subprocess.CalledProcessError as e:
             num_errors += 1
         else:
