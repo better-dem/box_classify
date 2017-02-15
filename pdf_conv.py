@@ -5,6 +5,9 @@
 import argparse
 import os
 import subprocess
+from multiprocessing import Pool, Process, Queue
+
+q = Queue()
 
 parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter, description='Convert all pdfs in input_dir to ppm images in output_dir')
 
@@ -17,6 +20,30 @@ parser.add_argument('-o', '--output_dir', required=True, type=str, help="the dir
 
 args = parser.parse_args()
 
+
+def update_progress():
+    done_counter = 0
+    error_counter = 0
+    while True:
+        update = q.get()
+        if update == "error":
+            error_counter += 1
+        elif update == "success":
+            done_counter += 1
+        elif update == "done":
+            print ("num errors {}, num converted {}".format(error_counter, done_counter))
+            break
+        if (done_counter + error_counter)  % 100 == 0:
+            print ("num errors {}, num converted {}".format(error_counter, done_counter))
+            
+
+def conv(infile, page, outfile):
+    try:
+        subprocess.check_output(["gs", "-sDEVICE=jpeg", "-dFirstPage="+str(page), "-dLastPage="+str(page), "-o", outfile, infile], timeout=30)
+        q.put("success")
+    except:
+        q.put("error")
+
 if __name__ == "__main__":
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
@@ -26,18 +53,14 @@ if __name__ == "__main__":
     assert(all([x.is_file() and x.name.endswith(".pdf") for x in dir_entries]))
     print ("Number of pdfs: {}".format(len(dir_entries)))
 
-    num_converted = 0
-    num_errors = 0
-    for e in dir_entries:
-        new_fname = e.name[0:-4]
-        try:
-            subprocess.check_output(["gs", "-sDEVICE=jpeg", "-f", args.page, "-l", args.page, e.path, args.output_dir+"/"+new_fname+"%d.jpg"], timeout=30)
-        except subprocess.CalledProcessError as e:
-            num_errors += 1
-        else:
-            num_converted += 1
+    p = Process(target=update_progress)
+    p.start()
+    with Pool(4) as p:
+        p.starmap(conv, [(e.path, 1, args.output_dir+"/"+e.name[0:-4]+".jpg") for e in dir_entries])
 
-    print("Done converting {} pdf files to ppm files. {} errors encountered.".format(num_converted, num_errors))
+    q.put("done")
+    p.join()
 
+    print("everything done")
         
 
