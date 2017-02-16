@@ -61,5 +61,5 @@ def select_rectangle(image_filename):
     ans = dict()
     app = SelectRegionApp(image_filename, ans)
     app.mainloop()
-    return ans
+    return ans['rect']
 
