@@ -5,8 +5,12 @@ import random as r
 import specify_rect as SR
 import label_image as LI
 import pickle
+from sklearn import svm
+from skimage import feature, color
+from PIL import Image
+import numpy as np
 
-NUM_TRAIN = 3
+NUM_TRAIN = 10
 
 possible_commands = {"full": "run all steps, from manual labeling through classifying all remaining examples", 
                      "manual-label": "run the manual labeling step", "train":"run the training step, requires manual labeling to be done first", 
@@ -62,6 +66,63 @@ class ClassificationProject:
             label = LI.manually_label(i.path, self.bbox)
             self.manual_labels[i.name] = label
 
+    def crossvalidate(self):
+        """
+        leave-one-out crossvalidation
+        """
+        results = []
+        full_label_set = set(self.manual_labels.values())
+        d = sorted(self.manual_labels.keys())
+        for i in range(len(d)):
+            tmp_train = list(d)
+            del tmp_train[i]
+            tmp_label_set = set([self.manual_labels[x] for x in tmp_train])
+            # no training samples for one of the classes, skip this
+            if not len(tmp_label_set) == len(full_label_set):
+                continue
+            model = self.train_model({k: self.manual_labels[k] for k in tmp_train})
+            cls = self.classify_image(model, d[i])
+            results.append(cls == self.manual_labels[d[i]])
+
+        print(results)
+        print("{} / {} correct".format(len([res for res in results if res]), len(results)))
+
+    def get_feature_vector(self, image_filename):
+        """
+        uses self's images_dir and bounding box to extract image features
+        """
+        im = Image.open(self.images_dir+"/"+image_filename)
+        im = im.crop(self.bbox)
+        (width, height) = im.size
+        im = (1.0/256) * np.array(list(im.getdata())).reshape((height, width, 3))
+        return feature.hog(color.rgb2gray(im))
+ 
+    def train_model(self, labelled_training_dataset):
+        """
+        labelled_training_dataset is a dict mapping from filename -> label
+        returns model
+        """
+        d = list(labelled_training_dataset.keys()) 
+        X = [self.get_feature_vector(k) for k in d]
+        y = [labelled_training_dataset[k] for k in d]
+        classifier = svm.SVC()
+        classifier.fit(X, y)
+        return classifier
+
+    def evaluate_model(self, model, labelled_test_set):
+        d = list(labelled_test_dataset.keys()) 
+        X = [self.get_feature_vector(k) for k in d]
+        y_pred = model.predict(X)
+        y_true = [labelled_test_dataset[k] for k in d]
+        num_correct = len([i for i in range(len(labelled_test_dataset)) if y_pred[i] == y_true[i]])
+        num_incorrect = len([i for i in range(len(labelled_test_dataset)) if not y_pred[i] == y_true[i]])
+        return num_correct, num_incorrect
+
+    def classify_image(self, model, image_filename):
+        f = self.get_feature_vector(image_filename)
+        X = [f]
+        return model.predict(X)[0]
+        
     def __str__(self):
         return "ClassificationProject:\nbbox:{}\nmanual labels:{}".format(self.bbox, len(self.manual_labels))
 
@@ -80,7 +141,12 @@ if __name__ == "__main__":
     elif args.command == "train":
         pass
     elif args.command == "x-validate":
-        pass
+        project = ClassificationProject(args.output_dir+"/project.pkl", args.images_dir, NUM_TRAIN)
+        project.manually_label()
+        project.save()
+        print(project)
+        project.crossvalidate()
+
     elif args.command == "label-blank":
         pass
     else:
