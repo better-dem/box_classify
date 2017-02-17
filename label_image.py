@@ -3,11 +3,13 @@ from tkinter import messagebox as mb
 from PIL import Image, ImageTk
 
 class LabelImageBBOXApp(tk.Tk):
-    def __init__(self, image_filename, bbox, result):
+    def __init__(self, image_filename, bbox, image_resize, result):
         tk.Tk.__init__(self)
         self.result_dict = result
         self.x = self.y = 0
         im = Image.open(image_filename)
+        if not image_resize is None:
+            im = im.resize(image_resize)
         cropped = im.crop(bbox)
         self.tk_im = ImageTk.PhotoImage(cropped)
 
@@ -23,7 +25,11 @@ class LabelImageBBOXApp(tk.Tk):
         self.button = tk.Button(self, text="Submit Label", command=self.done)
         self.button.pack(side="bottom")
 
-    def done(self):
+        self.wm_title(image_filename)
+        self.e.bind('<Return>', self.done)
+        self.e.focus_set()
+        
+    def done(self, event=None):
         if self.e.get() == '':
             mb.showwarning("warning","we don't accept blank labels")
         else:
@@ -31,9 +37,9 @@ class LabelImageBBOXApp(tk.Tk):
             self.destroy()
 
 
-def manually_label(image_filename, bbox):
+def manually_label(image_filename, bbox, image_size = None):
     ans = dict()
-    app = LabelImageBBOXApp(image_filename, bbox, ans)
+    app = LabelImageBBOXApp(image_filename, bbox, image_size, ans)
     app.mainloop()
     return ans['label']
 

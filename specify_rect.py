@@ -4,12 +4,15 @@ from tkinter import messagebox as mb
 from PIL import Image, ImageTk
 
 class SelectRegionApp(tk.Tk):
-    def __init__(self, image_filename, result):
+    def __init__(self, image_filename, image_resize, result):
         tk.Tk.__init__(self)
         self.result_dict = result
         self.x = self.y = 0
-        self.im = Image.open(image_filename)
-        self.tk_im = ImageTk.PhotoImage(self.im)
+        im = Image.open(image_filename)
+        if not image_resize is None:
+            im = im.resize(image_resize)
+
+        self.tk_im = ImageTk.PhotoImage(im)
 
         self.label = tk.Label(self, text="Select a Rectangle To Extract")
         self.label.pack(side="top")
@@ -57,9 +60,9 @@ class SelectRegionApp(tk.Tk):
         pass
 
 
-def select_rectangle(image_filename):
+def select_rectangle(image_filename, image_resize=None):
     ans = dict()
-    app = SelectRegionApp(image_filename, ans)
+    app = SelectRegionApp(image_filename, image_resize, ans)
     app.mainloop()
     return ans['rect']
 
