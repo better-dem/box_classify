@@ -13,22 +13,56 @@ import numpy as np
 NUM_TRAIN = 100                 # size of training set
 SCALE_ALL_IMAGES = True         # scale all images to be the size of the image used to select a bounding box
 
-possible_commands = {"full": "run all steps, from manual labeling through classifying all remaining examples", 
+possible_commands = {"full": "run all steps, from manual labeling through classifying all remaining examples, ignoring steps that are already saved in the project file", 
                      "manual-label": "run the manual labeling step", "train":"run the training step, requires manual labeling to be done first", 
                      "x-validate": "run leave-one-out cross-validation on manually-labeled samples", 
-                     "label-blank":"use the trained model to label all remaining examples. No promises about the accuracy",
-                     "summary":"Load a project from the output directory and summarize it"}
+                     "summary":"Load a project from the output directory and summarize it", 
+                     "write-csv":"Write out a csv of label results. Can include multiple project files and there will only be one row per item"}
 
 
 parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter, description='Run box_classifier', epilog = "Possible commands: \n"+"\n".join([" - "+i[0] + ": " + i[1] for i in possible_commands.items()]))
 
 parser.add_argument('-c', '--command', required=True, type=str, help="the function to run. One of these:" + str(possible_commands.keys()), action='store')
-
-parser.add_argument('-i', '--images_dir', required=True, type=str, help="the directory containing only image files to be used for this classification", action='store')
-
-parser.add_argument('-o', '--output_dir', required=True, type=str, help="the directory to store models, training labels, and results", action='store')
+parser.add_argument('-i', '--images_dir', required=False, type=str, help="the directory containing only image files to be used for this classification", action='store')
+parser.add_argument('-p', '--project_files', nargs='+', required=True, type=str, help="the file to store pickled project object", action='store')
+parser.add_argument('-o', '--output_file', required=False, type=str, help="the file to save output such as csv files", action='store')
 
 args = parser.parse_args()
+
+
+def write_results_csv(named_classfication_projects, filename):
+    """
+    write out results from several classification projects to a single CSV file
+    join by item names
+
+    Params:
+    named_classfication_projects: a dict, mapping project name to project object
+    filename: csv output filename
+    """
+    with open(filename,'w') as f:
+        title_row_items = ["item name"] 
+        for n in sorted(named_classfication_projects.keys()):
+            title_row_items += [n + " label", n + " label origin"]
+        f.write(','.join(title_row_items)+"\n")
+        
+        # order item names with manually labelled items at the top
+        all_item_names = []
+        for p in named_classfication_projects.values():
+            all_item_names = [k for k in p.manual_labels.keys() if not k in all_item_names] + all_item_names
+            all_item_names = all_item_names + [k for k in p.result_labels.keys() if not k in all_item_names]
+
+        for item in all_item_names:
+            row = [item]
+            for project_name in sorted(named_classfication_projects.keys()):
+                project = named_classfication_projects[project_name]
+                if item in project.manual_labels:
+                    row += [ project.manual_labels[item], "manually labelled"]
+                elif item in project.result_labels:
+                    row += [ project.result_labels[item], "automatically labelled"]
+                else:
+                    row += ["","NA"]
+            f.write(','.join(row)+"\n")
+
 
 class ClassificationProject:
     def __init__(self, filename, images_dir, num_train, image_size=None, bbox=None, model=None, manual_labels = dict(), result_labels = dict()):
@@ -108,11 +142,32 @@ class ClassificationProject:
                 continue
             model = self.train_model({k: self.manual_labels[k] for k in tmp_train})
             cls = self.classify_image(model, d[i])
-            print("cls: {}, prediction: {}".format(self.manual_labels[d[i]], cls))
             results.append(cls == self.manual_labels[d[i]])
 
         print(results)
         print("{} / {} correct".format(len([res for res in results if res]), len(results)))
+
+    def train(self):
+        """
+        train the full model with all manually labelled date
+        """
+        self.model = self.train_model(self.manual_labels)
+
+    def classify_all(self, upto=None):
+        dir_entries = list(os.scandir(self.images_dir))
+        assert(len(dir_entries) >= self.num_train)
+        assert(all([x.is_file() for x in dir_entries]))
+        work_set = [e.name for e in dir_entries if not e.name in self.manual_labels.keys()]
+        print("Classifying all unlabelled images. Number of images: {}".format(len(work_set)))
+
+        j = 0
+        for item in work_set:
+            if not upto is None and j >= upto:
+                break
+            if not j == 0 and j % 100 == 0:
+                print("On image # {}".format(j))
+            self.result_labels[item] = self.classify_image(self.model, item)
+            j += 1
 
     def get_feature_vector(self, image_filename):
         """
@@ -156,38 +211,56 @@ class ClassificationProject:
         return classes[max(range(len(classes)), key = lambda x: probs[x])]
         
     def __str__(self):
-        return "ClassificationProject:\nbbox:{}\nnumber of manually labeled items:{}\nnumber of classes:{}".format(self.bbox, len(self.manual_labels), len(set(self.manual_labels.values())))
+        return "ClassificationProject:\nbbox:{}\nnumber of manually labeled items:{}\nnumber of automatically labeled items:{}\nnumber of classes:{}".format(self.bbox, len(self.manual_labels), len(self.result_labels), len(set(self.manual_labels.values())))
 
 if __name__ == "__main__":
-    if not os.path.exists(args.output_dir):
-        os.makedirs(args.output_dir)
-
     if args.command == "full":
-        pass
+        assert(len(args.project_files) == 1)
+        project = ClassificationProject.from_file(args.project_files[0])
+        if project is None:
+            project = ClassificationProject(args.project_files[0], args.images_dir, NUM_TRAIN)
+
+        if not len(project.manual_labels) == NUM_TRAIN:
+            project.manually_label()
+            project.save()
+
+        if project.model is None:
+            project.train()
+            project.save()
+
+        print("classifying all non-manually-labelled images ...")
+        project.classify_all()
+        project.save()
+        print("done")
+
     elif args.command == "manual-label":
-        project = ClassificationProject(args.output_dir+"/project.pkl", args.images_dir, NUM_TRAIN)
+        assert(len(args.project_files) == 1)
+        project = ClassificationProject(args.project_files[0], args.images_dir, NUM_TRAIN)
         project.manually_label()
         project.save()
         print(project)
         
-    elif args.command == "train":
-        pass
     elif args.command == "x-validate":
-        project = ClassificationProject.from_file(args.output_dir+"/project.pkl")
+        assert(len(args.project_files) == 1)
+        project = ClassificationProject.from_file(args.project_files[0])
         if project is None:
-            project = ClassificationProject(args.output_dir+"/project.pkl", args.images_dir, NUM_TRAIN)
+            project = ClassificationProject(args.project_files[0], args.images_dir, NUM_TRAIN)
         if not len(project.manual_labels) == NUM_TRAIN:
             project.manually_label()
             project.save()
         print(project)
         project.crossvalidate()
 
-    elif args.command == "label-blank":
-        pass
     elif args.command == "summary":
-        project = ClassificationProject.from_file(args.output_dir+"/project.pkl")
-        print(project)
-        
+        for p in args.project_files:
+            project = ClassificationProject.from_file(p)
+            print(project)
+
+    elif args.command == "write-csv":
+        print(args.project_files)
+        named_projects = {x.split('/')[-1]: ClassificationProject.from_file(x) for x in args.project_files}
+        write_results_csv(named_projects, args.output_file)
+
     else:
         print ("no, just no")
 

@@ -17,7 +17,9 @@ And ghostscript
 
 ## Example Usage
 
-> ./run.py -c x-validate -i /home/cohend/mollie_ppm -o /home/cohend/mollie_model
+> ./run.py -c x-validate -i /home/cohend/mollie_ppm -p /home/cohend/mollie_model/persona1.pkl
+> ./run.py -c full -i /home/cohend/mollie_ppm -p /home/cohend/mollie_model/persona1.pkl
+> ./run.py -c summary -p /home/cohend/mollie_model/persona1.pkl
 
+> ./run.py -c write-csv -o /home/cohend/mollie_model/personeros.csv -p /home/cohend/mollie_model/persona1.pkl /home/cohend/mollie_model/persona2.pkl
 
-> ./run.py -c manual-label -i /home/cohend/mollie_ppm -o /home/cohend/mollie_model
